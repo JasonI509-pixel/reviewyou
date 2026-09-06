@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Price Scanner</title>
+
+  <!-- TensorFlow.js and MobileNet AI model (loaded directly into the browser) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #121212;
+      color: #ffffff;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      margin-top: 15px;
+      display: none;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:disabled {
+      background-color: #444;
+      cursor: not-allowed;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
+      line-height: 1.5;
+      background: #1e1e1e;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .price {
+      color: #28a745;
+      font-weight: bold;
+      font-size: 22px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Item & Furniture Price Scanner</h1>
+    
+    <button id="start-btn">Allow Camera</button>
+    <button id="scan-btn" disabled>Scan & Price Item</button>
+
+    <video id="webcam" autoplay playsinline></video>
+
+    <div id="result">Loading AI Model... Please wait.</div>
+  </div>
+
+  <script>
+    const video = document.getElementById('webcam');
+    const startBtn = document.getElementById('start-btn');
+    const scanBtn = document.getElementById('scan-btn');
+    const resultDiv = document.getElementById('result');
+
+    let model = null;
+
+    // Local price lookup database for common items & furniture
+    const priceDatabase = {
+      'chair': '$40 - $150',
+      'folding chair': '$20 - $50',
+      'rocking chair': '$80 - $250',
+      'sofa': '$300 - $1,200',
+      'table': '$70 - $350',
+      'desk': '$80 - $300',
+      'lamp': '$15 - $60',
+      'television': '$200 - $800',
+      'monitor': '$100 - $400',
+      'laptop': '$400 - $1,500',
+      'coffee mug': '$5 - $15',
+      'water bottle': '$10 - $30',
+      'backpack': '$25 - $80',
+      'bookcase': '$50 - $200',
+      'couch': '$300 - $1,200',
+      'keyboard': '$20 - $100',
+      'mouse': '$10 - $50',
+      'clock': '$15 - $50'
+    };
+
+    // 1. Load local AI model on page load
+    async function loadModel() {
+      try {
+        model = await mobilenet.load();
+        resultDiv.innerText = 'AI Model Loaded! Click "Allow Camera" to start.';
+      } catch (err) {
+        resultDiv.innerText = 'Failed to load local AI model.';
+        console.error(err);
+      }
+    }
+    loadModel();
+
+    // 2. Request camera access
+    startBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        startBtn.style.display = 'none';
+        scanBtn.disabled = false;
+        resultDiv.innerText = 'Point camera at an item and click "Scan & Price Item".';
+      } catch (err) {
+        resultDiv.innerText = 'Camera access was denied or not supported.';
+        console.error(err);
+      }
+    });
+
+    // 3. Classify object using local TensorFlow model
+    scanBtn.addEventListener('click', async () => {
+      if (!model) return;
+
+      resultDiv.innerText = 'Scanning item...';
+      scanBtn.disabled = true;
+
+      try {
+        // Run image recognition locally on the video frame
+        const predictions = await model.classify(video);
+
+        if (predictions && predictions.length > 0) {
+          const itemDetected = predictions[0].className.toLowerCase();
+          
+          // Match detected item with local price estimate
+          let estimatedPrice = '$20 - $100'; // Default fallback range
+
+          for (const key in priceDatabase) {
+            if (itemDetected.includes(key)) {
+              estimatedPrice = priceDatabase[key];
+              break;
+            }
+          }
+
+          resultDiv.innerHTML = `
+            Detected: <strong>${predictions[0].className}</strong><br>
+            Estimated Price: <span class="price">${estimatedPrice}</span>
+          `;
+        } else {
+          resultDiv.innerText = 'Could not identify the item. Try moving closer.';
+        }
+      } catch (err) {
+        resultDiv.innerText = 'Error processing image.';
+        console.error(err);
+      } finally {
+        scanBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
