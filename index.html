@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Item Price Scanner</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+    #video, #canvas { max-width: 100%; border-radius: 12px; margin-top: 10px; }
+    button { padding: 12px 24px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; margin: 5px; background: #007bff; color: white; }
+    button:disabled { background: #ccc; }
+    #result { margin-top: 20px; font-size: 18px; font-weight: bold; color: #333; }
+  </style>
+</head>
+<body>
+
+  <h1>Item & Furniture Price Scanner</h1>
+  
+  <div>
+    <button id="start-btn">Allow Camera & Start</button>
+    <button id="capture-btn" disabled>Scan & Estimate Price</button>
+  </div>
+
+  <br>
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <div id="result">Click "Allow Camera & Start" to begin.</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const startBtn = document.getElementById('start-btn');
+    const captureBtn = document.getElementById('capture-btn');
+    const resultDiv = document.getElementById('result');
+
+    // Request camera access
+    startBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } // Uses back camera on phones
+        });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        startBtn.style.display = 'none';
+        captureBtn.disabled = false;
+        resultDiv.innerText = 'Point your camera at an item and click "Scan & Estimate Price".';
+      } catch (err) {
+        resultDiv.innerText = 'Camera access denied or not supported.';
+        console.error(err);
+      }
+    });
+
+    // Capture photo and send to server
+    captureBtn.addEventListener('click', async () => {
+      resultDiv.innerText = 'Analyzing item and fetching price...';
+      captureBtn.disabled = true;
+
+      // Draw current video frame to canvas
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert image frame to Base64 format
+      const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
+
+      try {
+        const response = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: imageData })
+        });
+
+        const data = await response.json();
+        if (data.priceInfo) {
+          resultDiv.innerText = data.priceInfo;
+        } else {
+          resultDiv.innerText = 'Could not determine price. Try again.';
+        }
+      } catch (error) {
+        resultDiv.innerText = 'Error connecting to server.';
+        console.error(error);
+      } finally {
+        captureBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
