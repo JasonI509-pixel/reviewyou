@@ -6,26 +6,28 @@ import { fileURLToPath } from 'url';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Gemini API (Store your key in environment variables)
+// Initialize Google Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-app.use(express.json({ limit: '10mb' }));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Allow handling base64 image payloads up to 10MB
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-app.post('/api/scan', async (req, res) => {
+// API Endpoint for scanning
+app.post('/scan', async (req, res) => {
   try {
     const { image } = req.body;
 
     if (!image) {
-      return res.status(400).json({ error: 'No image data provided' });
+      return res.status(400).json({ result: 'No image data sent.' });
     }
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = "Identify the item or furniture in this image. Estimate its typical market price range in USD. Provide a brief 2-sentence response with the name of the item and its estimated price range.";
+    const prompt = "Look at this image. Identify the primary item or furniture shown. Provide its estimated market price range in USD and a brief 1-2 sentence description of what it is.";
 
     const imagePart = {
       inlineData: {
@@ -34,17 +36,16 @@ app.post('/api/scan', async (req, res) => {
       }
     };
 
-    const result = await model.generateContent([prompt, imagePart]);
-    const response = await result.response;
-    const text = response.text();
+    const apiResponse = await model.generateContent([prompt, imagePart]);
+    const responseText = apiResponse.response.text();
 
-    res.json({ priceInfo: text });
+    res.json({ result: responseText });
   } catch (error) {
-    console.error('API Error:', error);
-    res.status(500).json({ error: 'Failed to analyze image' });
+    console.error('Backend Error:', error);
+    res.status(500).json({ result: 'Error analyzing the image.' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`App running at http://localhost:${PORT}`);
 });
